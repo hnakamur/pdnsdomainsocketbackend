@@ -55,6 +55,16 @@ func getSerial() int {
 	return serialSeq
 }
 
+var hostnameIPMaps map[string]string
+
+func init() {
+	hostnameIPMaps = map[string]string{
+		"foo.example.com": "192.50.100.1",
+		"bar.example.com": "192.50.100.2",
+		"baz.example.com": "192.50.100.3",
+	}
+}
+
 func echoServer(c net.Conn) {
 	for {
 		buf := make([]byte, 512)
@@ -84,13 +94,7 @@ func echoServer(c net.Conn) {
 					{
 						QType: req.Parameters.QType,
 						QName: req.Parameters.QName,
-						Content: "192.50.100.1",
-						TTL: 300,
-					},
-					{
-						QType: req.Parameters.QType,
-						QName: req.Parameters.QName,
-						Content: "192.50.100.2",
+						Content: hostnameIPMaps[req.Parameters.QName],
 						TTL: 300,
 					},
 				},
