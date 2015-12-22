@@ -6,8 +6,14 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
+	"sync"
 )
 
+// NOTE: とりあえずデコードだけできればよいので
+// http://mattyjwilliams.blogspot.jp/2013/01/using-go-to-unmarshal-json-lists-with.html
+// のSolutionB: Mixed Type structの方式で、各methodのパラメータに対応する
+// フィールドをごちゃ混ぜで持つようにします。
 type RequestParams struct {
 	Path string `json:"path"`
 	QType string `json:"qtype"`
@@ -16,6 +22,8 @@ type RequestParams struct {
 	Local string `json:"local"`
 	RealRemote string `json:"real-remote"`
 	ZoneID int `json:"zone-id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
 }
 
 type Request struct {
@@ -35,6 +43,17 @@ type Response struct {
 }
 
 var socketFilePath string
+
+// シリアル番号の下2桁
+var serialSeq int
+var serialLock sync.Mutex
+
+func getSerial() int {
+	serialLock.Lock()
+	serialSeq++
+	serialLock.Unlock()
+	return serialSeq
+}
 
 func echoServer(c net.Conn) {
 	for {
@@ -57,7 +76,7 @@ func echoServer(c net.Conn) {
 			resp := `{"result":true}`
 			_, err = c.Write([]byte(resp))
 			if err != nil {
-				log.Println("Failed to initialize write: ", err)
+				log.Println("Failed to write initialize response: ", err)
 			}
 		case "lookup":
 			resp := Response{
@@ -81,10 +100,34 @@ func echoServer(c net.Conn) {
 			if err != nil {
 				log.Println("Failed to write lookup response: ", err)
 			}
-		default:
-			if err != nil {
-				log.Println("unsupported method: ", req.Method)
+		case "getDomainMetadata":
+			switch req.Parameters.Kind {
+			case "PRESIGNED":
+				resp := `{"result":[]}`
+				_, err = c.Write([]byte(resp))
+				if err != nil {
+					log.Println("Failed to write getDomainMetadata PRESIGNED response: ", err)
+				}
+			case "SOA-EDIT":
+				resp := `{"result":[]}`
+				_, err = c.Write([]byte(resp))
+				if err != nil {
+					log.Println("Failed to write getDomainMetadata SOA-EDIT response: ", err)
+				}
+			default:
+				if err != nil {
+					log.Println("unsupported kind for getDomainMetadata: ", req.Parameters.Kind)
+				}
 			}
+		case "calculateSOASerial":
+			serial := getSerial()
+			resp := `{"result":` + strconv.Itoa(serial) + `}`
+			_, err = c.Write([]byte(resp))
+			if err != nil {
+				log.Println("Failed to write calculateSOASerial response: ", err)
+			}
+		default:
+			log.Println("unsupported method: ", req.Method)
 		}
 	}
 }
